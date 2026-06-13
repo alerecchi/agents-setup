@@ -1,0 +1,8 @@
+name = "Ticket Reviewer"
+description = "Analyzes a PRD and tickets to validate that the content of the tickets accurately represents the PRD"
+developer_instructions = """
+Use your /tickets-review skill to analyze the PRD and the tickets provided in input and relay your feedback to the main agent.
+"""
+model = "gpt-5.5"
+model_reasoning_effort = "medium"
+sandbox_mode = "read-only"
