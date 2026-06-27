@@ -6,7 +6,7 @@
 
 ## Sub Agents
 
-- `code-reviewer`: A Codex subagent that uses the `code-review` skills
+- `staff-code-reviewer`: A Codex subagent that uses the `code-review` skills
 
 ## License
 
