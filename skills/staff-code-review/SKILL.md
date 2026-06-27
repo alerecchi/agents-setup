@@ -1,148 +1,105 @@
 ---
 name: staff-code-review
-description: Performs rigorous code reviews focused on logic errors, security risks, production risks, test quality, architectural alignment, and project standards compliance. Use when the user asks to review code, review a change, inspect uncommitted work, audit implementation quality, or evaluate tests.
+description: Audit code changes, especially AI-generated code, for correctness, security, production risk, architectural fit, unnecessary code, duplicated behavior, and test quality. Use when the user asks to review code, audit a change, inspect uncommitted work, evaluate tests, or check implementation quality.
+disable-model-invocation: true
 ---
 
-# Code Review
+# Staff Code Review
 
-## Quick start
+Run a staff-level, skeptical audit of the requested change. If the user does not name a branch, commit, PR, or patch, review the current uncommitted work, including staged and unstaged changes.
 
-Review the requested code change. If the user does not specify a change id, review the
-current uncommitted code.
+The review is complete only when every changed file, every changed hunk, and every changed line has been considered.
 
-Prioritize findings that are real, actionable, and important. Focus on:
+## Workflow
 
-- Logic errors
-- Security vulnerabilities
-- Production risks
-- Architectural misalignments
-- Test quality and meaningful edge-case coverage
-- Incorrect or excessive mocking
-- Compliance with project standards in:
-  - `AGENTS.md`
-  - `CONTEXT.md`
-  - `docs/adr/`
-
-Also verify the implementation is not over-engineered. Keep only valid abstractions;
-call out unnecessary complexity that should be simplified.
-
-## Review workflow
-
-1. Identify the review target:
-   - If the user provides a change id, review that change.
+1. Identify the review target.
+   - If the user names a change, review that change.
    - Otherwise, review uncommitted code.
-2. Inspect the project guidance:
+
+2. Read project guidance before judging the change.
    - Read `AGENTS.md` if present.
    - Read `CONTEXT.md` if present.
-   - Read relevant files under `docs/adr/` if present.
-3. Inspect all changed files before responding.
-   - Do not produce the final review after inspecting only a subset of changed files.
-   - Review both staged and unstaged changes when reviewing uncommitted code.
-   - Include related nearby context when needed to understand behavior.
-4. Inspect related tests.
-5. Identify only real findings.
-6. Classify each item as either:
-   - `Blocking finding` — must be fixed before the change is considered safe.
-   - `Non-blocking suggestion` — optional improvement that is valid but not required
-     for safety or correctness.
-7. For every finding, assume full responsibility:
-   - Be specific.
-   - Explain the issue.
-   - Explain why it matters.
-   - Explain how to fix it.
-8. If a fix requires code, include the corrected code in a markdown code block inside
-   the `How to fix` section.
-9. If no findings are found, output a celebratory verdict.
+   - Read relevant ADRs under `docs/adr/` if present.
+   - Treat documented project standards as review criteria.
 
-## Review focus
+3. Inspect the full diff.
+   - Review all changed files before writing the final answer.
+   - Include staged and unstaged changes for uncommitted reviews.
+   - Read nearby unchanged code when needed to understand the behavior.
+   - Follow call sites, imports, types, tests, and configuration when they affect the change.
+
+4. Run the line audit.
+   For every changed line, ask:
+   - Does this line need to exist?
+   - Is it solving a real requirement?
+   - Is the same behavior already implemented elsewhere in the changed code or nearby code?
+   - Is this abstraction earning its cost?
+   - Is this branch, option, type, mock, helper, or config now unused or redundant?
+   - Could this line create a correctness, security, reliability, or maintenance risk?
+
+   If a line looks unnecessary, duplicated, speculative, or over-engineered, either report it or explicitly decide why it is harmless enough to leave alone.
+
+5. Inspect tests.
+   - Identify which behavior the tests prove.
+   - Check whether the tests would fail if the important behavior were broken.
+   - Look for missing edge cases, excessive mocking, implementation-detail assertions,
+     flaky tests, weak snapshots, and missing regression coverage.
+   - Treat risky behavior without meaningful tests as a finding.
+
+6. Classify issues.
+   - `Blocking finding`: must be fixed before the change is safe.
+   - `Non-blocking suggestion`: useful improvement, not required for safety.
+   - `Needs user review`: suspicious or ambiguous code where the reviewer cannot prove
+     it is wrong, but the user should consciously decide.
+
+7. Write only defensible findings.
+   - Do not invent issues.
+   - Do not nitpick harmless style unless it violates documented standards.
+   - Prefer fewer, stronger findings.
+   - Every finding must name the exact file and line.
+   - Every finding must explain the issue, the impact, and a concrete fix.
+
+## Review Criteria
 
 ### Correctness
 
-Look for:
+Look for broken business logic, invalid assumptions, incorrect edge cases, bad state
+transitions, race conditions, data loss, API contract breaks, backwards compatibility
+breaks, and error handling gaps.
 
-- Broken business logic
-- Incorrect edge-case handling
-- Race conditions
-- Invalid assumptions
-- Error handling gaps
-- Data loss or data corruption risks
-- Incorrect state transitions
-- Incorrect API contracts
-- Backward compatibility issues
+### Security And Production Risk
 
-### Security and production risk
+Look for injection, auth bypasses, sensitive data exposure, unsafe parsing or
+deserialization, insecure defaults, missing validation, unsafe filesystem/network/shell
+operations, secret or personal data logging, abuse risks, observability gaps, rollback
+risks, and reliability hazards.
 
-Look for:
+### Architecture And Maintainability
 
-- Injection vulnerabilities
-- Authentication or authorization bypasses
-- Sensitive data exposure
-- Unsafe deserialization or parsing
-- Insecure defaults
-- Missing validation
-- Insufficient rate limiting or abuse protection
-- Unsafe filesystem, network, or shell operations
-- Logging of secrets or personal data
-- Reliability, observability, rollback, and operational risks
+Look for conflicts with `AGENTS.md`, `CONTEXT.md`, or ADRs; duplicated logic;
+unnecessary abstractions; speculative options; leaky boundaries; tight coupling that
+creates real risk; inconsistent domain language; and code that does not match existing
+project patterns.
 
-### Architecture and maintainability
-
-Look for:
-
-- Misalignment with `AGENTS.md`, `CONTEXT.md`, or ADR decisions
-- Unnecessary abstractions
-- Over-engineered designs
-- Duplicated logic that should be consolidated
-- Tight coupling where it creates real maintenance risk
-- Leaky abstractions
-- Inconsistent naming or domain modeling
-- Violations of established project patterns
-
-Do not flag style preferences unless they create concrete risk or violate documented
-project standards.
+AI-generated code deserves extra deletion pressure: helpers, wrappers, types, comments,
+tests, mocks, fallbacks, config, and branches must each earn their place.
 
 ### Tests
 
-Ensure tests are meaningful. Look for:
+Tests should prove behavior, not implementation trivia. Flag tests that would pass
+despite the bug, tests that mock the unit under test, broad mocks that hide integration
+failures, missing edge cases, nondeterminism, and snapshots without meaningful
+assertions.
 
-- Missing coverage for important behavior
-- Missing edge cases
-- Tests that assert implementation details instead of behavior
-- Overly broad mocks that hide real failures
-- Inappropriate mocking of the unit under test
-- Flaky or nondeterministic tests
-- Tests that do not fail on the bug they claim to cover
-- Snapshot tests without meaningful assertions
-- Missing regression tests for risky fixes
+## Output Format
 
-## Blocking findings vs non-blocking suggestions
+Lead with findings. Group them in this order:
 
-Use `Blocking finding` for issues that affect:
+## Blocking Findings
 
-- Correctness
-- Security
-- Data integrity
-- Production reliability
-- Compliance with documented project standards
-- Architectural decisions recorded in ADRs
-- Meaningful test coverage for risky behavior
-- Over-engineering that creates concrete maintenance or correctness risk
+### Short finding title
 
-Use `Non-blocking suggestion` for improvements that are helpful but not required, such
-as:
-
-- Minor simplifications
-- Naming improvements
-- Additional low-risk test cases
-- Small readability improvements
-- Optional refactors that do not affect safety or correctness
-
-Do not mix blocking findings and non-blocking suggestions together. Keep them in
-separate sections.
-
-## Output format
-
-1. Short finding title
+**Where:** `path/to/file.ext:line`
 
 **Issue:**  
 Explain exactly what is wrong.
@@ -151,27 +108,24 @@ Explain exactly what is wrong.
 Explain the concrete risk or impact.
 
 **How to fix:**  
-Explain the fix. If code is needed, include it here:
+Explain the fix. Include corrected code only when it makes the fix clearer.
 
-```language
-// corrected code
-```
+## Non-Blocking Suggestions
 
-Where:
-path/to/file.ext:line
+Use the same format as blocking findings.
 
-If there are no findings, use this format:
-🎉 Excellent work -no findings.
+## Needs User Review
 
-I reviewed the target code for logic errors, security risk, production risk,
-architecture alignment, test quality, and project standards compliance. I did not
-find any issues that need to be addressed.
+Use this section for suspicious code that may be intentional but deserves a conscious
+decision. Be clear about what evidence is missing.
 
-## Review discipline
+## No Findings
 
-- Do not invent findings.
-- Do not nitpick harmless style differences.
-- Do not defer responsibility with vague language.
-- Do not say something "might be wrong" unless explaining the exact condition.
-- Prefer fewer, stronger findings over many speculative comments.
-- Every finding must be actionable.
+If there are no blocking findings, no non-blocking suggestions, and no user-review
+items, write:
+
+No findings.
+
+I reviewed the target change for correctness, security risk, production risk,
+architecture alignment, test quality, project standards, duplicated behavior, and
+unnecessary code. I did not find anything that needs to be addressed.
